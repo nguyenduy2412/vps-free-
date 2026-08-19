@@ -308,6 +308,33 @@ public sealed class ContactRequestServiceTests
         repository.Verify(x => x.FindAsync(Guid.Empty, It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(ContactRequestStatus.Pending, ContactRequestStatus.Contacted, ContactRequestStatus.Rejected, ContactRequestStatus.Cancelled)]
+    [InlineData(ContactRequestStatus.Contacted, ContactRequestStatus.Approved, ContactRequestStatus.Rejected, ContactRequestStatus.Cancelled)]
+    [InlineData(ContactRequestStatus.Approved, null, null, null)]
+    [InlineData(ContactRequestStatus.Rejected, null, null, null)]
+    [InlineData(ContactRequestStatus.Cancelled, null, null, null)]
+    public async Task Get_by_id_maps_backend_owned_allowed_transitions_for_every_status(
+        ContactRequestStatus currentStatus,
+        ContactRequestStatus? first,
+        ContactRequestStatus? second,
+        ContactRequestStatus? third)
+    {
+        var repository = CreateRepository();
+        var request = ExistingRequest(currentStatus);
+        repository.Setup(x => x.FindAsync(request.Id, It.IsAny<CancellationToken>())).ReturnsAsync(request);
+        var service = CreateService(repository);
+
+        var detail = await service.GetByIdAsync(request.Id, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        var expected = new[] { first, second, third }
+            .Where(status => status.HasValue)
+            .Select(status => status!.Value)
+            .ToArray();
+        Assert.Equal(expected, detail.AllowedTransitions);
+    }
+
     [Fact]
     public async Task Update_status_rejects_invalid_id_actor_enum_and_note_length_before_repository_call()
     {

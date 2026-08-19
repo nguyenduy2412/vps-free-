@@ -43,6 +43,7 @@ jobs:
           ! grep -q 'services.AddRateLimiter' "$package/src/CloudServiceStore.WebApi/Security/ContactRequestRateLimitExtensions.cs"
           grep -q 'REQUIRE_CONTACT_SQLSERVER_TESTS' "$package/tests/CloudServiceStore.Integration.Tests/ContactRequestSqlServerMigrationTests.cs"
           grep -q 'SqlServer_concurrent_different_emails_do_not_block_each_other' "$package/tests/CloudServiceStore.Integration.Tests/ContactRequestSqlServerMigrationTests.cs"
+          grep -q 'SqlServer_app_lock_timeout_returns_unavailable_and_does_not_persist_request' "$package/tests/CloudServiceStore.Integration.Tests/ContactRequestSqlServerMigrationTests.cs"
           grep -q 'Contact request received.' "$package/src/CloudServiceStore.Application/ContactRequests/ContactRequestService.cs"
           grep -q 'GetAllowedTransitions(item.Status)' "$package/src/CloudServiceStore.Application/ContactRequests/ContactRequestService.cs"
           test "$(find "$package" -type f | wc -l)" -le 50

@@ -18,4 +18,6 @@ Yêu cầu: .NET SDK 10, Node.js, SQL Server qua Docker Desktop và PowerShell. 
 
 Public submit bị giới hạn theo IP. Khi triển khai sau reverse proxy, baseline phải cấu hình `UseForwardedHeaders` với trusted proxy/network **trước** `UseRateLimiter` để `RemoteIpAddress` là client IP đã được forwarding; không tự tin tưởng header từ Internet. Tìm kiếm dạng `Contains` là giới hạn MVP và có thể scan khi dữ liệu lớn; chỉ thêm full-text search sau khi có yêu cầu và phê duyệt riêng.
 
+Duplicate 24 giờ có atomicity production trên **SQL Server** nhờ transaction và `sp_getapplock` theo email đã chuẩn hóa. Provider non-SQL chỉ là fallback phục vụ test hành vi Application; nó không chứng minh concurrency guarantee tương đương SQL Server. Vì vậy, test concurrency, timeout app-lock và rollback phải chạy với `CONTACT_TEST_SQLSERVER_CONNECTION_STRING` disposable trước merge.
+
 Không có PDF, DOCX, báo cáo tiến độ, evidence lịch sử hoặc slide trong feature PR này. Những hồ sơ nộp đó được quản lý ngoài PR code để review feature tập trung và minh bạch.

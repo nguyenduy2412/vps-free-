@@ -145,6 +145,35 @@ public sealed class ContactRequestSqlServerMigrationTests
     }
 
     [Fact]
+    public async Task SqlServer_app_lock_timeout_returns_unavailable_and_does_not_persist_request()
+    {
+        var connectionString = GetDisposableConnectionStringOrSkip();
+        if (connectionString is null) return;
+
+        var options = new DbContextOptionsBuilder<CloudServiceStoreDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+
+        await ResetDatabaseAsync(options);
+
+        const string email = "timeout@example.com";
+        await using var lockConnection = new SqlConnection(connectionString);
+        await lockConnection.OpenAsync();
+        await AcquireSessionLockAsync(lockConnection, EmailLockResource(email));
+
+        await using (var context = new CloudServiceStoreDbContext(options))
+        {
+            var service = new ContactRequestService(new ContactRequestRepository(context));
+
+            await Assert.ThrowsAsync<ContactRequestLockUnavailableException>(() =>
+                service.CreateAsync(CreateRequest(email), null, "127.0.0.1", CancellationToken.None));
+        }
+
+        await using var assertionContext = new CloudServiceStoreDbContext(options);
+        Assert.Equal(0, await assertionContext.ContactRequests.CountAsync());
+    }
+
+    [Fact]
     public async Task SqlServer_rolls_back_contact_request_when_save_changes_fails()
     {
         var connectionString = GetDisposableConnectionStringOrSkip();
