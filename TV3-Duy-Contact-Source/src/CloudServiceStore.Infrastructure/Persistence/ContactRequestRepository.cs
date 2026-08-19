@@ -35,8 +35,7 @@ public sealed class ContactRequestRepository(CloudServiceStoreDbContext db)
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
-        if (!await AcquireEmailLockAsync(request.Email, cancellationToken))
-            return false;
+        await AcquireEmailLockAsync(request.Email, cancellationToken);
 
         var alreadyExists = await db.ContactRequests.AnyAsync(
             item => item.Email == request.Email && item.CreatedAt >= createdAfter,
@@ -121,7 +120,7 @@ public sealed class ContactRequestRepository(CloudServiceStoreDbContext db)
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>
         db.SaveChangesAsync(cancellationToken);
 
-    private async Task<bool> AcquireEmailLockAsync(
+    private async Task AcquireEmailLockAsync(
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
@@ -144,6 +143,10 @@ public sealed class ContactRequestRepository(CloudServiceStoreDbContext db)
         command.Parameters.Add(resource);
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
-        return result is not null && Convert.ToInt32(result) >= 0;
+        if (result is null || Convert.ToInt32(result) < 0)
+        {
+            throw new ContactRequestLockUnavailableException(
+                "The contact request queue is busy. Please retry shortly.");
+        }
     }
 }

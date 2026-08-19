@@ -20,6 +20,7 @@ public sealed class ContactRequestsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     public Task<IActionResult> Create(
         [FromBody] CreateContactRequestRequest request,
         CancellationToken cancellationToken) =>
@@ -115,6 +116,13 @@ public sealed class ContactRequestsController(
             return Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Business conflict",
+                detail: ex.Message);
+        }
+        catch (ContactRequestLockUnavailableException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Contact request queue is busy",
                 detail: ex.Message);
         }
         catch (ContactRequestValidationException ex)

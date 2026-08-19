@@ -53,6 +53,25 @@ public sealed class ContactRequestsControllerTests
     }
 
     [Fact]
+    public async Task Create_returns_503_problem_details_when_app_lock_is_unavailable()
+    {
+        var service = new Mock<IContactRequestService>();
+        service.Setup(x => x.CreateAsync(
+                It.IsAny<CreateContactRequestRequest>(),
+                null,
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ContactRequestLockUnavailableException("Queue timeout."));
+        var controller = CreateController(service, null, "127.0.0.1");
+
+        var result = await controller.Create(ValidRequest(), CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, problem.StatusCode);
+        Assert.Equal("Contact request queue is busy", Assert.IsType<ProblemDetails>(problem.Value).Title);
+    }
+
+    [Fact]
     public async Task Get_returns_paged_result_from_service()
     {
         var service = new Mock<IContactRequestService>();
@@ -181,7 +200,7 @@ public sealed class ContactRequestsControllerTests
     }
 
     [Fact]
-    public void Create_declares_429_problem_details_response_for_rate_limit()
+    public void Create_declares_rate_limit_and_queue_problem_details_responses()
     {
         var action = typeof(ContactRequestsController).GetMethod(nameof(ContactRequestsController.Create));
         Assert.NotNull(action);
@@ -191,6 +210,9 @@ public sealed class ContactRequestsControllerTests
 
         Assert.Contains(responses, response =>
             response.StatusCode == StatusCodes.Status429TooManyRequests
+            && response.Type == typeof(ProblemDetails));
+        Assert.Contains(responses, response =>
+            response.StatusCode == StatusCodes.Status503ServiceUnavailable
             && response.Type == typeof(ProblemDetails));
     }
 

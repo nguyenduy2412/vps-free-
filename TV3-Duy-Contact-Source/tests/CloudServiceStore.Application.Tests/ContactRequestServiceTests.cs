@@ -37,7 +37,9 @@ public sealed class ContactRequestServiceTests
             && item.PhoneNumber == "0901234567"
             && item.StatusHistory.Count == 1
             && item.StatusHistory.Single().FromStatus == ContactRequestStatus.Pending
-            && item.StatusHistory.Single().ToStatus == ContactRequestStatus.Pending),
+            && item.StatusHistory.Single().ToStatus == ContactRequestStatus.Pending
+            && item.StatusHistory.Single().Note == "Contact request received."
+            && item.StatusHistory.Single().CreatedAt == Now),
             It.Is<AuditLog>(audit =>
                 audit.AppUserId == ownerId
                 && audit.Action == "ContactRequest.Created"

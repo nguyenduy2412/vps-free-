@@ -36,3 +36,5 @@ public sealed class ContactRequestNotFoundException(string message) : Exception(
 public sealed class ContactRequestConflictException(string message) : Exception(message);
 
 public sealed class ContactRequestValidationException(string message) : Exception(message);
+
+public sealed class ContactRequestLockUnavailableException(string message) : Exception(message);
