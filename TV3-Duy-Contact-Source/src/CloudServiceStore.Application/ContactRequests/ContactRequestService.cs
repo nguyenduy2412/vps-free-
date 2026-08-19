@@ -24,15 +24,6 @@ public sealed partial class ContactRequestService(
         var now = clock.GetUtcNow();
         var email = request.Email.Trim().ToLowerInvariant();
 
-        if (await repository.HasRecentRequestAsync(
-                email,
-                now.AddHours(-24),
-                cancellationToken))
-        {
-            throw new ContactRequestConflictException(
-                "A contact request with this email was submitted recently.");
-        }
-
         var contactRequest = new ContactRequest
         {
             AppUserId = ownerId,
@@ -47,6 +38,7 @@ public sealed partial class ContactRequestService(
             CreatedAt = now
         };
 
+        // The initial receipt is an explicit timeline event, not a status transition.
         var history = new ContactRequestStatusHistory
         {
             ContactRequestId = contactRequest.Id,
@@ -59,22 +51,29 @@ public sealed partial class ContactRequestService(
         };
 
         contactRequest.StatusHistory.Add(history);
-        repository.Add(contactRequest);
-        repository.AddStatusHistory(history);
-        repository.AddAudit(
-            ownerId,
-            "ContactRequest.Created",
-            nameof(ContactRequest),
-            contactRequest.Id,
-            null,
-            JsonSerializer.Serialize(new
-            {
-                contactRequest.Status,
-                contactRequest.Email
-            }),
-            ipAddress);
+        var audit = new AuditLog
+        {
+            AppUserId = ownerId,
+            Action = "ContactRequest.Created",
+            EntityName = nameof(ContactRequest),
+            EntityId = contactRequest.Id,
+            NewValuesJson = JsonSerializer.Serialize(new { contactRequest.Status }),
+            IpAddress = ipAddress,
+            OccurredAt = now,
+            CreatedAt = now,
+            CreatedBy = ownerId
+        };
 
-        await repository.SaveChangesAsync(cancellationToken);
+        if (!await repository.TryCreateAsync(
+                contactRequest,
+                audit,
+                now.AddHours(-24),
+                cancellationToken))
+        {
+            throw new ContactRequestConflictException(
+                "A contact request with this email was submitted recently.");
+        }
+
         return new(contactRequest.Id, contactRequest.Status, contactRequest.CreatedAt);
     }
 
@@ -168,7 +167,6 @@ public sealed partial class ContactRequestService(
         };
 
         contactRequest.StatusHistory.Add(history);
-        repository.AddStatusHistory(history);
         repository.AddAudit(
             actorId,
             "ContactRequest.StatusChanged",
@@ -180,6 +178,7 @@ public sealed partial class ContactRequestService(
                 Status = contactRequest.Status,
                 Note = note
             }),
+            now,
             ipAddress);
 
         await repository.SaveChangesAsync(cancellationToken);
@@ -199,6 +198,12 @@ public sealed partial class ContactRequestService(
                 or ContactRequestStatus.Cancelled,
             _ => false
         };
+
+    private static IReadOnlyList<ContactRequestStatus> GetAllowedTransitions(
+        ContactRequestStatus currentStatus) =>
+        Enum.GetValues<ContactRequestStatus>()
+            .Where(candidate => CanTransition(currentStatus, candidate))
+            .ToArray();
 
     private static void ValidateCreate(CreateContactRequestRequest request)
     {
@@ -323,5 +328,6 @@ public sealed partial class ContactRequestService(
                     history.Note,
                     history.ChangedBy,
                     history.CreatedAt))
-                .ToArray());
+                .ToArray(),
+            GetAllowedTransitions(item.Status));
 }

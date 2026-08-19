@@ -12,11 +12,12 @@ import {
 import {
   contactRequestStatusMeta,
   contactRequestStatusValues,
-  getContactRequestTransitionHints,
-  requiresContactRequestStatusNote,
 } from "@/lib/contact-request-status";
 
 const pageSize = 12;
+type ContactRequestDetailWithWorkflow = ContactRequestDetail & {
+  allowedTransitions?: ContactRequestStatus[];
+};
 
 const formatDate = (value: string) => new Intl.DateTimeFormat("vi-VN", {
   dateStyle: "medium", timeStyle: "short"
@@ -24,7 +25,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("vi-VN", {
 
 export function AdminContactRequestsClient() {
   const [result, setResult] = useState<PagedResult<ContactRequestListItem> | null>(null);
-  const [selected, setSelected] = useState<ContactRequestDetail | null>(null);
+  const [selected, setSelected] = useState<ContactRequestDetailWithWorkflow | null>(null);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ContactRequestStatus | "">("");
@@ -68,14 +69,10 @@ export function AdminContactRequestsClient() {
     setSearch(searchDraft.trim());
   };
 
-  const allowedTransitions = selected ? getContactRequestTransitionHints(selected.status) : [];
+  const allowedTransitions = selected?.allowedTransitions ?? [];
 
   const changeStatus = async (next: ContactRequestStatus) => {
     if (!selected) return;
-    if (requiresContactRequestStatusNote(next) && !note.trim()) {
-      setError("Vui lòng nhập ghi chú khi từ chối hoặc huỷ yêu cầu.");
-      return;
-    }
     setSaving(true);
     setError("");
     try {

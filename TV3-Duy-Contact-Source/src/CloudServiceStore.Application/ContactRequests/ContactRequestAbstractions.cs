@@ -4,8 +4,9 @@ namespace CloudServiceStore.Application.ContactRequests;
 
 public interface IContactRequestRepository
 {
-    Task<bool> HasRecentRequestAsync(
-        string email,
+    Task<bool> TryCreateAsync(
+        ContactRequest request,
+        AuditLog audit,
         DateTimeOffset createdAfter,
         CancellationToken cancellationToken);
 
@@ -17,9 +18,6 @@ public interface IContactRequestRepository
         Guid id,
         CancellationToken cancellationToken);
 
-    void Add(ContactRequest request);
-    void AddStatusHistory(ContactRequestStatusHistory history);
-
     void AddAudit(
         Guid? actorId,
         string action,
@@ -27,6 +25,7 @@ public interface IContactRequestRepository
         Guid entityId,
         string? oldValuesJson,
         string? newValuesJson,
+        DateTimeOffset occurredAt,
         string? ipAddress);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);

@@ -10,7 +10,7 @@ public sealed class ContactRequestServiceTests
     private static readonly DateTimeOffset Now = new(2026, 8, 18, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task Create_normalizes_input_adds_history_and_audit()
+    public async Task Create_normalizes_input_persists_initial_event_and_minimal_audit_atomically()
     {
         var repository = CreateRepository();
         var service = CreateService(repository);
@@ -29,25 +29,25 @@ public sealed class ContactRequestServiceTests
 
         Assert.Equal(ContactRequestStatus.Pending, result.Status);
         Assert.Equal(Now, result.CreatedAt);
-        repository.Verify(x => x.Add(It.Is<ContactRequest>(item =>
+        repository.Verify(x => x.TryCreateAsync(
+            It.Is<ContactRequest>(item =>
             item.AppUserId == ownerId
             && item.FullName == "Nguyen Phuoc Duy"
             && item.Email == "duy@example.com"
             && item.PhoneNumber == "0901234567"
-            && item.StatusHistory.Count == 1)), Times.Once);
-        repository.Verify(x => x.AddStatusHistory(It.Is<ContactRequestStatusHistory>(history =>
-            history.FromStatus == ContactRequestStatus.Pending
-            && history.ToStatus == ContactRequestStatus.Pending
-            && history.ChangedBy == ownerId)), Times.Once);
-        repository.Verify(x => x.AddAudit(
-            ownerId,
-            "ContactRequest.Created",
-            nameof(ContactRequest),
-            It.IsAny<Guid>(),
-            null,
-            It.Is<string>(json => json.Contains("duy@example.com")),
-            "127.0.0.1"), Times.Once);
-        repository.Verify(x => x.SaveChangesAsync(CancellationToken.None), Times.Once);
+            && item.StatusHistory.Count == 1
+            && item.StatusHistory.Single().FromStatus == ContactRequestStatus.Pending
+            && item.StatusHistory.Single().ToStatus == ContactRequestStatus.Pending),
+            It.Is<AuditLog>(audit =>
+                audit.AppUserId == ownerId
+                && audit.Action == "ContactRequest.Created"
+                && audit.OccurredAt == Now
+                && audit.CreatedAt == Now
+                && audit.NewValuesJson != null
+                && audit.NewValuesJson.Contains("\"Status\":1")
+                && !audit.NewValuesJson.Contains("duy@example.com")),
+            Now.AddHours(-24),
+            CancellationToken.None), Times.Once);
     }
 
     [Theory]
@@ -67,11 +67,12 @@ public sealed class ContactRequestServiceTests
     public async Task Create_rejects_recent_duplicate_email()
     {
         var repository = CreateRepository();
-        repository.Setup(x => x.HasRecentRequestAsync(
-                "duy@example.com",
+        repository.Setup(x => x.TryCreateAsync(
+                It.IsAny<ContactRequest>(),
+                It.IsAny<AuditLog>(),
                 Now.AddHours(-24),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(false);
         var service = CreateService(repository);
 
         await Assert.ThrowsAsync<ContactRequestConflictException>(() =>
@@ -91,16 +92,13 @@ public sealed class ContactRequestServiceTests
             "127.0.0.1",
             CancellationToken.None);
 
-        repository.Verify(x => x.AddAudit(
-            null,
-            "ContactRequest.Created",
-            nameof(ContactRequest),
-            It.IsAny<Guid>(),
-            null,
-            It.Is<string?>(newValues => newValues != null
-                && newValues.Contains("duy@example.com")
-                && !newValues.Contains(privateMessage)),
-            "127.0.0.1"), Times.Once);
+        repository.Verify(x => x.TryCreateAsync(
+            It.IsAny<ContactRequest>(),
+            It.Is<AuditLog>(audit => audit.NewValuesJson != null
+                && !audit.NewValuesJson.Contains("duy@example.com")
+                && !audit.NewValuesJson.Contains(privateMessage)),
+            It.IsAny<DateTimeOffset>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]
@@ -137,10 +135,10 @@ public sealed class ContactRequestServiceTests
         Assert.Equal(actorId, result.ResolvedBy);
         Assert.Equal(Now, result.ResolvedAt);
         Assert.Single(result.StatusHistory);
-        repository.Verify(x => x.AddStatusHistory(It.Is<ContactRequestStatusHistory>(history =>
+        Assert.Contains(result.StatusHistory, history =>
             history.FromStatus == ContactRequestStatus.Contacted
             && history.ToStatus == ContactRequestStatus.Approved
-            && history.ChangedBy == actorId)), Times.Once);
+            && history.ChangedBy == actorId);
         repository.Verify(x => x.AddAudit(
             actorId,
             "ContactRequest.StatusChanged",
@@ -148,6 +146,7 @@ public sealed class ContactRequestServiceTests
             request.Id,
             It.IsAny<string>(),
             It.IsAny<string>(),
+            Now,
             "127.0.0.1"), Times.Once);
     }
 
@@ -176,6 +175,7 @@ public sealed class ContactRequestServiceTests
             request.Id,
             It.Is<string?>(oldValues => oldValues != null && !oldValues.Contains(privateMessage)),
             It.Is<string?>(newValues => newValues != null && !newValues.Contains(privateMessage)),
+            Now,
             null), Times.Once);
     }
 
@@ -299,6 +299,9 @@ public sealed class ContactRequestServiceTests
         Assert.Equal(request.Message, detail.Message);
         Assert.Equal(ContactRequestStatus.Contacted, detail.Status);
         Assert.Equal([receivedHistory.Id, firstHistory.Id], detail.StatusHistory.Select(item => item.Id));
+        Assert.Equal(
+            [ContactRequestStatus.Approved, ContactRequestStatus.Rejected, ContactRequestStatus.Cancelled],
+            detail.AllowedTransitions);
         Assert.Null(empty);
         repository.Verify(x => x.FindAsync(Guid.Empty, It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -354,11 +357,12 @@ public sealed class ContactRequestServiceTests
     private static Mock<IContactRequestRepository> CreateRepository()
     {
         var repository = new Mock<IContactRequestRepository>();
-        repository.Setup(x => x.HasRecentRequestAsync(
-                It.IsAny<string>(),
+        repository.Setup(x => x.TryCreateAsync(
+                It.IsAny<ContactRequest>(),
+                It.IsAny<AuditLog>(),
                 It.IsAny<DateTimeOffset>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(true);
         repository.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         return repository;

@@ -31,10 +31,7 @@ public sealed class ContactRequestsController(
                 GetIpAddress(),
                 cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = result.Id },
-                result);
+            return StatusCode(StatusCodes.Status201Created, result);
         });
 
     [Authorize(Policy = "ManageContactRequests")]
@@ -77,25 +74,27 @@ public sealed class ContactRequestsController(
     public Task<IActionResult> UpdateStatus(
         Guid id,
         [FromBody] UpdateContactRequestStatusRequest request,
-        CancellationToken cancellationToken) =>
-        Execute(async () => Ok(await contactRequestService.UpdateStatusAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId))
+            return Task.FromResult<IActionResult>(Unauthorized());
+
+        return Execute(async () => Ok(await contactRequestService.UpdateStatusAsync(
             id,
             request,
-            GetActorId(),
+            actorId,
             GetIpAddress(),
             cancellationToken)));
+    }
 
     private Guid? GetOptionalUserId() =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
             ? userId
             : null;
 
-    private Guid GetActorId() =>
-        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId)
-            ? actorId
-            : throw new UnauthorizedAccessException();
-
     private string? GetIpAddress() =>
+        // In proxy deployments, Program.cs must run UseForwardedHeaders before
+        // UseRateLimiter so this value is the trusted forwarded client address.
         HttpContext.Connection.RemoteIpAddress?.ToString();
 
     private async Task<IActionResult> Execute(Func<Task<IActionResult>> action)
@@ -123,13 +122,6 @@ public sealed class ContactRequestsController(
             return Problem(
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Validation failed",
-                detail: ex.Message);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status401Unauthorized,
-                title: "Unauthorized",
                 detail: ex.Message);
         }
     }

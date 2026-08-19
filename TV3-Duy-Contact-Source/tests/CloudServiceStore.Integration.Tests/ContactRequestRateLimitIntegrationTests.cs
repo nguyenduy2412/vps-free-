@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CloudServiceStore.Integration.Tests;
 
@@ -25,6 +27,9 @@ public sealed class ContactRequestRateLimitIntegrationTests(CloudServiceStoreApi
             RequestFor(2));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        var problem = await rejected.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, problem.Status);
     }
 
     private static object RequestFor(int index) => new

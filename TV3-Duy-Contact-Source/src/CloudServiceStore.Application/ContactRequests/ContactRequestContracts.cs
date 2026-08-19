@@ -61,7 +61,8 @@ public sealed record ContactRequestDetailDto(
     DateTimeOffset? ResolvedAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    IReadOnlyList<ContactRequestStatusHistoryDto> StatusHistory);
+    IReadOnlyList<ContactRequestStatusHistoryDto> StatusHistory,
+    IReadOnlyList<ContactRequestStatus> AllowedTransitions);
 
 public interface IContactRequestService
 {

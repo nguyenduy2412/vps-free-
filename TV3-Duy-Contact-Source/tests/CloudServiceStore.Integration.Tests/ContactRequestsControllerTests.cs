@@ -12,7 +12,7 @@ namespace CloudServiceStore.Integration.Tests;
 public sealed class ContactRequestsControllerTests
 {
     [Fact]
-    public async Task Create_returns_201_and_passes_optional_authenticated_owner()
+    public async Task Create_returns_201_without_advertising_the_protected_detail_route()
     {
         var service = new Mock<IContactRequestService>();
         var id = Guid.NewGuid();
@@ -27,10 +27,10 @@ public sealed class ContactRequestsControllerTests
 
         var result = await controller.Create(ValidRequest(), CancellationToken.None);
 
-        var created = Assert.IsType<CreatedAtActionResult>(result);
+        var created = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status201Created, created.StatusCode);
         var payload = Assert.IsType<ContactRequestConfirmationDto>(created.Value);
         Assert.Equal(id, payload.Id);
-        Assert.Equal(nameof(ContactRequestsController.GetById), created.ActionName);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class ContactRequestsControllerTests
     }
 
     [Fact]
-    public async Task UpdateStatus_returns_401_problem_details_when_name_identifier_claim_is_missing()
+    public async Task UpdateStatus_returns_401_when_name_identifier_claim_is_missing()
     {
         var service = new Mock<IContactRequestService>();
         var controller = CreateController(service);
@@ -171,9 +171,7 @@ public sealed class ContactRequestsControllerTests
             new(ContactRequestStatus.Contacted, "Đã liên hệ."),
             CancellationToken.None);
 
-        var problem = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status401Unauthorized, problem.StatusCode);
-        Assert.Equal("Unauthorized", Assert.IsType<ProblemDetails>(problem.Value).Title);
+        Assert.IsType<UnauthorizedResult>(result);
         service.Verify(x => x.UpdateStatusAsync(
             It.IsAny<Guid>(),
             It.IsAny<UpdateContactRequestStatusRequest>(),
@@ -245,5 +243,5 @@ public sealed class ContactRequestsControllerTests
     private static ContactRequestDetailDto Detail(Guid id, ContactRequestStatus status) =>
         new(id, "Nguyen Phuoc Duy", "duy@example.com", "0901234567", null,
             "Tư vấn cloud", "Tôi cần tư vấn dịch vụ cloud cho doanh nghiệp.",
-            status, null, null, null, DateTimeOffset.UtcNow, null, []);
+            status, null, null, null, DateTimeOffset.UtcNow, null, [], []);
 }
