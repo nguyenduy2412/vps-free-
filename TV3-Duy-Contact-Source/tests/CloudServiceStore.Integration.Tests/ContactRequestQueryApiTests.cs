@@ -109,7 +109,7 @@ public sealed class ContactRequestQueryApiTests(CloudServiceStoreApiFactory fact
     }
 
     [Fact]
-    public async Task Admin_detail_includes_status_history()
+    public async Task Admin_detail_includes_status_history_and_backend_allowed_transitions()
     {
         var request = NewRequest($"Detail history {Guid.NewGuid():N}", ContactRequestStatus.Contacted);
         var history = new ContactRequestStatusHistory
@@ -138,6 +138,15 @@ public sealed class ContactRequestQueryApiTests(CloudServiceStoreApiFactory fact
         Assert.Equal(request.Id, document.RootElement.GetProperty("id").GetGuid());
         Assert.Single(document.RootElement.GetProperty("statusHistory").EnumerateArray());
         Assert.Equal(history.Id, document.RootElement.GetProperty("statusHistory")[0].GetProperty("id").GetGuid());
+        Assert.Equal(
+            [
+                (int)ContactRequestStatus.Approved,
+                (int)ContactRequestStatus.Rejected,
+                (int)ContactRequestStatus.Cancelled
+            ],
+            document.RootElement.GetProperty("allowedTransitions").EnumerateArray()
+                .Select(value => value.GetInt32())
+                .ToArray());
     }
 
     private HttpClient CreateAuthenticatedClient(string role)
