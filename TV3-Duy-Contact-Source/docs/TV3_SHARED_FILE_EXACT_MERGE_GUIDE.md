@@ -95,10 +95,10 @@ builder.Services.AddApiRateLimiting(builder.Configuration);
 Chèn **ngay sau** nó:
 
 ```csharp
-builder.Services.AddContactRequestRateLimiting(builder.Configuration);
+builder.Services.ConfigureContactRequestRateLimiting(builder.Configuration);
 ```
 
-Không thêm `app.UseRateLimiter()` lần hai. Pipeline nền phải chỉ có một middleware `app.UseRateLimiter();`, thường trước authentication/authorization. Extension TV3 chỉ thêm named policy `contact-requests`; nó không được có `OnRejected` cục bộ để không thay body 429 của Login, Order hoặc Affiliate.
+Không thêm `AddRateLimiter()` hoặc `app.UseRateLimiter()` lần hai. Pipeline nền phải chỉ có một `AddApiRateLimiting(...)` và một middleware `app.UseRateLimiter();`; extension TV3 chỉ thêm named policy `contact-requests` vào `RateLimiterOptions`, không thay `GlobalLimiter`, `OnRejected` hoặc body `ProblemDetails` 429 của Login, Order hay Affiliate. Với reverse proxy/load balancer, baseline phải chạy `UseForwardedHeaders` với trusted proxy/network trước `UseRateLimiter` để partition theo client IP đã được xác thực.
 
 ### 3.3. Policy Admin/Editor — bắt buộc
 
@@ -179,7 +179,7 @@ export type ContactRequestStatus = 1 | 2 | 3 | 4 | 5;
 export type ContactRequestConfirmation = { id: string; status: ContactRequestStatus; createdAt: string };
 export type ContactRequestListItem = { id: string; fullName: string; email: string; phoneNumber: string; companyName?: string; subject: string; status: ContactRequestStatus; createdAt: string };
 export type ContactRequestHistory = { id: string; fromStatus: ContactRequestStatus; toStatus: ContactRequestStatus; note?: string; changedBy?: string; createdAt: string };
-export type ContactRequestDetail = ContactRequestListItem & { message: string; resolutionNote?: string; resolvedBy?: string; resolvedAt?: string; statusHistory: ContactRequestHistory[] };
+export type ContactRequestDetail = ContactRequestListItem & { message: string; resolutionNote?: string; resolvedBy?: string; resolvedAt?: string; statusHistory: ContactRequestHistory[]; allowedTransitions: ContactRequestStatus[] };
 ```
 
 ### 5.2. Query helper và API module Contact
