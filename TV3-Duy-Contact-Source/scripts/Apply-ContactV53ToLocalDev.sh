@@ -77,7 +77,7 @@ REPO_DIR="$(cd -- "$REPO_DIR" && pwd)"
 SOURCE_DIR="$(cd -- "$SOURCE_DIR" && pwd)"
 git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail '--repo is not a Git worktree.'
 [[ -f "$REPO_DIR/CloudServiceStore.sln" ]] || fail 'CloudServiceStore.sln is missing from --repo.'
-[[ -f "$SOURCE_DIR/TV3_PACKAGE_README.md" ]] || fail '--source is not a TV3-Duy-Contact-Source package.'
+[[ -f "$SOURCE_DIR/docs/TV3_PACKAGE_README.md" ]] || fail '--source is not a TV3-Duy-Contact-Source package.'
 [[ -f "$SOURCE_DIR/docs/TV3_SHARED_FILE_EXACT_MERGE_GUIDE.md" ]] || fail 'Shared hunk guide is missing from --source.'
 
 contact_files=(
