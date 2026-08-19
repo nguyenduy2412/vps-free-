@@ -36,6 +36,11 @@ jobs:
           test -f "$package/src/CloudServiceStore.WebApi/Controllers/ContactRequestsController.cs"
           test -f "$package/frontend/src/app/contact/page.tsx"
           test -f "$package/frontend/src/app/admin/contact-requests/page.tsx"
+          test -f "$package/scripts/Build-And-AddContactRequestMigration.ps1"
+          grep -q 'sys.sp_getapplock' "$package/src/CloudServiceStore.Infrastructure/Persistence/ContactRequestRepository.cs"
+          grep -q 'ConfigureContactRequestRateLimiting' "$package/src/CloudServiceStore.WebApi/Security/ContactRequestRateLimitExtensions.cs"
+          ! grep -q 'services.AddRateLimiter' "$package/src/CloudServiceStore.WebApi/Security/ContactRequestRateLimitExtensions.cs"
+          grep -q 'REQUIRE_CONTACT_SQLSERVER_TESTS' "$package/tests/CloudServiceStore.Integration.Tests/ContactRequestSqlServerMigrationTests.cs"
           test "$(find "$package" -type f | wc -l)" -le 50
           test -z "$(find "$package" -type f \( -name '*.pdf' -o -name '*.docx' -o -name 'package-lock.json' \) -print -quit)"
 

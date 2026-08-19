@@ -14,7 +14,7 @@
 
 ## 2. Áp dụng source trước migration
 
-Copy non-shared Contact từ bundle v47, sau đó merge **từng hunk** theo `TV3_SHARED_FILE_EXACT_MERGE_GUIDE.md`. Shared hunk phải gồm DbContext, DI, `Program.cs`, appsettings, `api.ts`, docker-compose và `admin-nav.ts` Contact-only. Riêng navigation chỉ thêm `IconMessageCircle` + item `/admin/contact-requests` Admin/Editor; không thay nguyên file.
+Copy non-shared Contact từ package TV3 hiện tại, sau đó merge **từng hunk** theo `TV3_SHARED_FILE_EXACT_MERGE_GUIDE.md`. Shared hunk phải gồm DbContext, DI, `Program.cs`, appsettings, `api.ts`, docker-compose và `admin-nav.ts` Contact-only. Riêng navigation chỉ thêm `IconMessageCircle` + item `/admin/contact-requests` Admin/Editor; không thay nguyên file.
 
 Chạy audit scope trước build:
 
@@ -81,10 +81,12 @@ Nếu một ô fail: xóa **migration vừa sinh**, không sửa tay để che m
 
 ## 6. Chỉ sau review: database disposable và Docker rỗng
 
-Migration đã review mới được test bằng DB disposable/volume Contact-empty:
+Migration đã review mới được test bằng DB disposable/volume Contact-empty. Đặt `CONTACT_TEST_SQLSERVER_CONNECTION_STRING` trỏ đến Initial Catalog có prefix `ContactRequestIntegration_` và đặt `REQUIRE_CONTACT_SQLSERVER_TESTS=true` để pipeline không được phép skip SQL Server test:
 
 ```powershell
-.\scripts\Test-ContactRequestMigrationSafety.ps1
+$env:CONTACT_TEST_SQLSERVER_CONNECTION_STRING = "Server=localhost,1433;Database=ContactRequestIntegration_TV3;User Id=sa;Password=<secret>;TrustServerCertificate=True"
+$env:REQUIRE_CONTACT_SQLSERVER_TESTS = "true"
+dotnet test tests/CloudServiceStore.Integration.Tests/CloudServiceStore.Integration.Tests.csproj --filter "FullyQualifiedName~ContactRequestSqlServerMigrationTests"
 .\scripts\Run-ContactRequestEmptyDatabase.ps1 -Reset
 docker compose -f docker-compose.yml -f docker-compose.contact-empty.yml ps -a
 docker compose -f docker-compose.yml -f docker-compose.contact-empty.yml logs --no-color migrator

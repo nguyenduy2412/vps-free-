@@ -1,6 +1,7 @@
 using CloudServiceStore.Application.ContactRequests;
 using CloudServiceStore.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace CloudServiceStore.Integration.Tests;
 
@@ -9,19 +10,8 @@ public sealed class ContactRequestSqlServerMigrationTests
     [Fact]
     public async Task SqlServer_migrates_empty_contact_request_test_database()
     {
-        var connectionString = Environment.GetEnvironmentVariable("CONTACT_TEST_SQLSERVER_CONNECTION_STRING");
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            // Local developers may not have a disposable SQL Server. CI must set this
-            // variable to a dedicated ContactRequestIntegration_* database.
-            return;
-        }
-
-        if (!connectionString.Contains("ContactRequestIntegration_", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "CONTACT_TEST_SQLSERVER_CONNECTION_STRING must target a disposable ContactRequestIntegration_* database.");
-        }
+        var connectionString = GetDisposableConnectionStringOrSkip();
+        if (connectionString is null) return;
 
         var options = new DbContextOptionsBuilder<CloudServiceStoreDbContext>()
             .UseSqlServer(connectionString)
@@ -43,15 +33,8 @@ public sealed class ContactRequestSqlServerMigrationTests
     [Fact]
     public async Task SqlServer_concurrent_same_email_allows_only_one_contact_request()
     {
-        var connectionString = Environment.GetEnvironmentVariable("CONTACT_TEST_SQLSERVER_CONNECTION_STRING");
-        if (string.IsNullOrWhiteSpace(connectionString))
-            return;
-
-        if (!connectionString.Contains("ContactRequestIntegration_", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "CONTACT_TEST_SQLSERVER_CONNECTION_STRING must target a disposable ContactRequestIntegration_* database.");
-        }
+        var connectionString = GetDisposableConnectionStringOrSkip();
+        if (connectionString is null) return;
 
         var options = new DbContextOptionsBuilder<CloudServiceStoreDbContext>()
             .UseSqlServer(connectionString)
@@ -96,5 +79,33 @@ public sealed class ContactRequestSqlServerMigrationTests
 
         await using var assertionContext = new CloudServiceStoreDbContext(options);
         Assert.Equal(1, await assertionContext.ContactRequests.CountAsync());
+    }
+
+    private static string? GetDisposableConnectionStringOrSkip()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("CONTACT_TEST_SQLSERVER_CONNECTION_STRING");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("REQUIRE_CONTACT_SQLSERVER_TESTS"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "CONTACT_TEST_SQLSERVER_CONNECTION_STRING is required when REQUIRE_CONTACT_SQLSERVER_TESTS=true.");
+            }
+
+            return null;
+        }
+
+        var databaseName = new SqlConnectionStringBuilder(connectionString).InitialCatalog;
+        if (string.IsNullOrWhiteSpace(databaseName) ||
+            !databaseName.StartsWith("ContactRequestIntegration_", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "CONTACT_TEST_SQLSERVER_CONNECTION_STRING must use an Initial Catalog beginning with ContactRequestIntegration_.");
+        }
+
+        return connectionString;
     }
 }
